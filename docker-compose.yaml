@@ -1,0 +1,54 @@
+version: '3.7'
+services:
+  # Servers on the consul cluster
+  server-1:
+    image: consul
+    command: consul agent -server -bootstrap-expect=3 -data-dir /tmp/consul -node=server-1
+
+  server-2:
+    image: consul
+    command: consul agent -server -bootstrap-expect=3 -data-dir /tmp/consul -retry-join=server-1 -node=server-2
+
+  server-3:
+    image: consul
+    command: consul agent -server -bootstrap-expect=3 -data-dir /tmp/consul -retry-join=server-1 -node=server-3
+
+  # Consul UI is exposed here.
+  consul-ui:
+    image: consul
+    command: consul agent -data-dir /tmp/consul -retry-join=server-1 -client 0.0.0.0 -ui -node=client-ui
+    ports:
+      - 8500:8500
+
+  hello_server:
+    image: server
+    depends_on:
+      - server-1
+      - server-2
+      - server-3
+      - consul-ui
+      - load-balancer
+    expose:
+      - 7777
+    environment:
+      - CONSUL_SERVER=server-1
+      - APP_NAME=hello_server
+      - APP_PORT=7777
+      - CONSUL_PORT=8500
+      - TAGS=hello_server,grpc_server
+
+  load-balancer:
+    image: lb
+    depends_on:
+      - server-1
+      - server-2
+      - server-3
+      - consul-ui
+    environment:
+      - CONSUL_SERVER=server-1
+      - APP_NAME=nginx
+      - APP_PORT=5000
+      - CONSUL_PORT=8500
+      - TAGS=nginx
+    ports:
+      - 5000:5000
